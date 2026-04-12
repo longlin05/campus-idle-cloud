@@ -1,0 +1,48 @@
+# Maven打包目录
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# STS/Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# VS Code
+.vscode/
+
+# ========== 我帮你新增必加项 ==========
+# 本地配置文件（密码、数据库地址绝对不能上传git！）
+application-local.yml
+bootstrap-local.yml
+*.properties
+*.env
+
+# 日志文件
+logs/
+*.log
+
+# 本地运行临时文件
+.DS_Store
+temp/
+
+# docker本地挂载数据（mysql/nacos数据不上传git）
+data/
+
+# maven本地仓库
+repository/
+
+# 编译临时文件
+bin/

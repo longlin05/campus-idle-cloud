@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: campus-gateway
+  config:
+    import: optional:nacos:localhost:8848
+  cloud:
+    gateway:
+      routes:
+        - id: campus-auth
+          uri: lb://campus-auth
+          predicates:
+            - Path=/auth/**
+          filters:
+            - StripPrefix=1
+        - id: campus-user
+          uri: lb://campus-user
+          predicates:
+            - Path=/user/**
+          filters:
+            - StripPrefix=1
+        - id: campus-item
+          uri: lb://campus-item
+          predicates:
+            - Path=/item/**
+          filters:
+            - StripPrefix=1
+
+server:
+  port: 8080
