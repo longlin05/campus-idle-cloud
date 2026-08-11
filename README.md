@@ -14,7 +14,7 @@
 
 ### 用户端
 - 注册 / 登录（密码登录 + 短信验证码登录）、忘记密码
-- 商品发布 / 编辑 / 上下架，图片上传（本地 + 阿里云 OSS）
+- 商品发布 / 编辑 / 上下架，图片上传（阿里云 OSS）
 - 商品浏览、关键词搜索、分类筛选、热门商品
 - 购物车、订单（购买 / 出售）、收货地址管理
 - 收藏、关注 / 粉丝、用户主页
@@ -40,34 +40,39 @@
 | 限流熔断 | Sentinel Dashboard 1.8.6 |
 | 文件存储 | 阿里云 OSS |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios |
-| 部署 | Docker / Docker Compose、Nginx |
+| 部署 | Docker / Docker Compose（多阶段构建）、Nginx、GitHub Actions CI/CD |
 
 ## 🏗 项目结构
 
 ```
 campus-idle-cloud/
-├── common/          # 公共模块：实体、DTO/VO、JWT、OSS、Kafka、Redis、统一异常与响应
-├── campus-gateway/  # 网关服务 (8080)：路由转发、JWT 鉴权、跨域
-├── campus-auth/     # 认证服务 (8081)：登录/注册/重置密码、默认管理员初始化
-├── campus-user/     # 用户服务 (8082)：个人中心、购物车、收藏、关注、私信、消息、地址
-├── campus-item/     # 商品服务 (8083)：商品 CRUD、分类、搜索、文件上传（OSS）
-├── campus-order/    # 订单服务 (8084)：订单创建/支付流程、订单快照
-├── campus-admin/    # 管理后台服务 (8085)：用户/商品/订单/分类/轮播图/系统消息管理
-├── front/           # 前端工程：Vue3 用户端 + 管理后台
-├── sql/             # SQL 初始化脚本
-├── nginx/           # Nginx 反向代理配置
-└── docker-compose.yml  # 一键编排基础设施 + 全部微服务
+├── Dockerfile         # 根多阶段构建：镜像内编译全部后端微服务（服务器无需 JDK/Maven/Node）
+├── docker-compose.yml # 一键编排基础设施 + 全部微服务（密钥从 .env 读取）
+├── .env.example       # 环境变量模板（复制为 .env 后填写真实密钥）
+├── common/            # 公共模块：实体、DTO/VO、JWT、OSS、Kafka、Redis、统一异常与响应
+├── campus-gateway/    # 网关服务 (8080)：路由转发、JWT 鉴权、跨域
+├── campus-auth/       # 认证服务 (8081)：登录/注册/重置密码、默认管理员初始化
+├── campus-user/       # 用户服务 (8082)：个人中心、购物车、收藏、关注、私信、消息、地址
+├── campus-item/       # 商品服务 (8083)：商品 CRUD、分类、搜索、文件上传（OSS）
+├── campus-order/      # 订单服务 (8084)：订单创建/支付流程、订单快照
+├── campus-admin/      # 管理后台服务 (8085)：用户/商品/订单/分类/轮播图/系统消息管理
+├── front/             # 前端工程：Vue3 用户端 + 管理后台
+├── sql/               # SQL 初始化脚本 + 增量补丁
+├── nginx/             # Nginx 镜像构建（前端托管 + 反代）与配置
+├── scripts/           # 运维脚本（数据库备份等）
+├── DEPLOYMENT.md      # 生产部署手册（服务器准备、迁移、备份、CI/CD、验证）
+└── .github/           # GitHub Actions 自动构建部署工作流
 ```
 
 ### 微服务架构
 
 ```
                         ┌────────────┐
-                        │   Nginx    │  :8088 / :8443
+       浏览器 ───────────►│   Nginx    │  :8088 / :8443（前端静态页 + /api 反代）
                         └─────┬──────┘
-                              │
+                              │ /api
                         ┌─────▼──────┐        ┌──────────────┐
-  前端(Vue3, :5173) ───►│  Gateway   │────────► Nacos 注册中心│
+                        │  Gateway   │────────► Nacos 注册中心│
                         │   :8080    │        └──────────────┘
                         └──┬───┬──┬──┘
            ┌───────────────┘   │  └────────────────┐
@@ -118,9 +123,9 @@ docker compose ps
 > 前端（用户端 + 管理后台）由 Nginx 镜像内构建托管，用户端默认通过 http://localhost:8088 访问（含 `/admin` 管理后台）。
 
 > Nacos 控制台：http://localhost:8848/nacos（默认账号 `nacos`/`nacos`，**已开启认证**，首次登录请修改；服务连接账号与 token 见 `.env`）
+> Sentinel 控制台：http://localhost:8858（默认账号 `sentinel`/`sentinel`）
 
 > 数据库增量补丁脚本（`sql/` 下，如 `patch_fix_missing_schema.sql`）的执行方式见 [DEPLOYMENT.md](DEPLOYMENT.md#4-数据库初始化与迁移)。
-> Sentinel 控制台：http://localhost:8858（默认账号 `sentinel`/`sentinel`）
 
 ### 方式二：本地手动启动（开发调试）
 
@@ -177,6 +182,7 @@ npm run dev        # 默认 http://localhost:5173（已配置 /api 代理到网�
 | `OSS_BUCKET_NAME` | `campus-idle` | OSS Bucket 名称 |
 | `JWT_SECRET` | `your-secret-key-change-in-production` | JWT 签名密钥（所有服务共享，生产必须更换） |
 | `NACOS_SERVER_ADDR` | `localhost:8848` | Nacos 地址 |
+| `NACOS_AUTH_ENABLE` | `true` | Nacos 认证开关（遇兼容性问题可临时关） |
 | `NACOS_USERNAME` | `nacos` | 服务连接 Nacos 的账号（与控制台账号一致） |
 | `NACOS_PASSWORD` | `nacos` | 服务连接 Nacos 的密码 |
 | `NACOS_AUTH_TOKEN` | 见 `.env.example` | Nacos 认证 token（base64，>32 字节，生产必须更换） |
