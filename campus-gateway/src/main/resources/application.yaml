@@ -17,6 +17,9 @@ spring:
       database: ${REDIS_DATABASE:5}
   cloud:
     nacos:
+      # Nacos 认证账号（与 Nacos 控制台账号一致，开启认证后必须）
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
       config:
         server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
         import-check:
@@ -32,7 +35,7 @@ spring:
       globalcors:
         corsConfigurations:
           '[/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns: "${CORS_ALLOWED_ORIGINS:http://localhost:8088,http://localhost:5173}"
             allowedMethods: "*"
             allowedHeaders: "*"
             exposedHeaders: "*"
@@ -105,7 +108,7 @@ server:
   port: 8080
 
 jwt:
-  secret: your-secret-key-change-in-production
+  secret: ${JWT_SECRET:your-secret-key-change-in-production}
   expire-time: 86400000
   token-prefix: Bearer
 

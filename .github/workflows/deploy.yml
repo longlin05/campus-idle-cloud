@@ -1,0 +1,69 @@
+# ============================================================
+# 自动构建 + 部署工作流
+# 触发：push 到 main / 手动触发
+# 流程：多阶段构建后端镜像 + 前端 nginx 镜像 → 推送到镜像仓库 → SSH 登录服务器拉取并重启
+#
+# 需要的仓库 Secrets：
+#   IMAGE_PREFIX         镜像仓库命名空间前缀（含尾部斜杠），如 registry.cn-hangzhou.aliyuncs.com/xxx/
+#   REGISTRY_HOST        镜像仓库地址，如 registry.cn-hangzhou.aliyuncs.com
+#   REGISTRY_USERNAME    镜像仓库账号
+#   REGISTRY_PASSWORD    镜像仓库密码
+#   DEPLOY_HOST          服务器 IP/域名
+#   DEPLOY_USER          服务器 SSH 用户
+#   DEPLOY_SSH_KEY       服务器 SSH 私钥
+#   DEPLOY_PATH          服务器上仓库克隆目录（如 /opt/campus-idle-cloud）
+# ============================================================
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY_HOST }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      # 多阶段构建：后端 6 个服务 + 前端 nginx 镜像，一次编译、镜像内完成 Maven/Node 构建
+      - name: Build & push images
+        env:
+          IMAGE_PREFIX: ${{ secrets.IMAGE_PREFIX }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker compose build
+          docker compose push
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            # 拉取最新 compose 配置（.env 为服务器本地文件，git pull 不会覆盖）
+            git pull --ff-only
+            export IMAGE_PREFIX="${{ secrets.IMAGE_PREFIX }}"
+            export TAG="${{ github.sha }}"
+            docker compose pull
+            docker compose up -d
+            # 清理悬空镜像，保留数据卷
+            docker image prune -f
+            docker compose ps

@@ -3,7 +3,7 @@ services:
     image: mysql:8.0
     container_name: micro-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: changeme
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme}
       MYSQL_CHARSET: utf8mb4
       MYSQL_COLLATION: utf8mb4_unicode_ci
     ports:
@@ -11,6 +11,8 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # 统一 utf8mb4，避免中文乱码（服务端 + 客户端 + 初始化脚本）
+      - ./sql/mysql-charset.cnf:/etc/mysql/conf.d/mysql-charset.cnf:ro
     networks:
       - microservices-net
     healthcheck:
@@ -26,13 +28,15 @@ services:
     environment:
       MODE: standalone
       NACOS_APPLICATION_PORT: 8848
-      NACOS_AUTH_ENABLE: 'false'
+      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-true}
+      # Nacos 认证 token（base64，>32 字节）。生产务必通过 .env 修改
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-Y2FtcHVzLWlkbGUtY2xvdWQtbmFjb3MtYXV0aC1zZWNyZXQta2V5LXByb2QtMjAyNg==}
       NACOS_METRICS_PROMETHEUS_ENABLE: 'false'
       NACOS_METRICS_ENABLE: 'false'
       JVM_XMS: 512m
       JVM_XMX: 512m
       JVM_XMN: 256m
-      JAVA_OPT: '-Dnacos.standalone=true -Dnacos.core.auth.enabled=false -XX:-UseContainerSupport'
+      JAVA_OPT: '-Dnacos.standalone=true -XX:-UseContainerSupport'
     ports:
       - "8848:8848"
       - "9848:9848"
@@ -55,9 +59,9 @@ services:
   redis:
     image: redis:8.0-alpine
     container_name: micro-redis
-    command: redis-server --requirepass changeme --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes
     environment:
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
     ports:
       - "6379:6379"
     volumes:
@@ -65,7 +69,7 @@ services:
     networks:
       - microservices-net
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "changeme", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -147,20 +151,23 @@ services:
     restart: always
 
   campus-gateway:
-    image: campus-gateway:latest
+    image: ${IMAGE_PREFIX:-}campus-gateway:${TAG:-latest}
     container_name: micro-gateway
     build:
-      context: ./campus-gateway
+      context: .
       dockerfile: Dockerfile
+      target: campus-gateway
     environment:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_NAMESPACE: dev
       NACOS_GROUP: DEFAULT_GROUP
-      NACOS_USERNAME: nacos
-      NACOS_PASSWORD: nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      LOGGING_FILE_NAME: /app/logs/campus-gateway.log
     ports:
       - "8080:8080"
     depends_on:
@@ -176,28 +183,33 @@ services:
       timeout: 10s
       retries: 15
       start_period: 60s
+    volumes:
+      - logs-data:/app/logs
     restart: always
 
   campus-auth:
-    image: campus-auth:latest
+    image: ${IMAGE_PREFIX:-}campus-auth:${TAG:-latest}
     container_name: micro-auth
     build:
-      context: ./campus-auth
+      context: .
       dockerfile: Dockerfile
+      target: campus-auth
     environment:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_NAMESPACE: dev
       NACOS_GROUP: DEFAULT_GROUP
-      NACOS_USERNAME: nacos
-      NACOS_PASSWORD: nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: campus_auth
+      LOGGING_FILE_NAME: /app/logs/campus-auth.log
       MYSQL_USER: root
-      MYSQL_PASSWORD: changeme
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
     depends_on:
       nacos:
         condition: service_healthy
@@ -213,30 +225,39 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    volumes:
+      - logs-data:/app/logs
     restart: always
 
   campus-user:
-    image: campus-user:latest
+    image: ${IMAGE_PREFIX:-}campus-user:${TAG:-latest}
     container_name: micro-user
     build:
-      context: ./campus-user
+      context: .
       dockerfile: Dockerfile
+      target: campus-user
     environment:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_NAMESPACE: dev
       NACOS_GROUP: DEFAULT_GROUP
-      NACOS_USERNAME: nacos
-      NACOS_PASSWORD: nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: campus_user
+      LOGGING_FILE_NAME: /app/logs/campus-user.log
       MYSQL_USER: root
-      MYSQL_PASSWORD: changeme
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
       KAFKA_SERVER: kafka:29092
       CAMPUS_AUTH_BASE_URL: http://campus-auth:8081
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}
+      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-campus-idle}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-your-aliyun-access-key-id}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-your-aliyun-access-key-secret}
     depends_on:
       nacos:
         condition: service_healthy
@@ -254,30 +275,39 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    volumes:
+      - logs-data:/app/logs
     restart: always
 
   campus-item:
-    image: campus-item:latest
+    image: ${IMAGE_PREFIX:-}campus-item:${TAG:-latest}
     container_name: micro-item
     build:
-      context: ./campus-item
+      context: .
       dockerfile: Dockerfile
+      target: campus-item
     environment:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_NAMESPACE: dev
       NACOS_GROUP: DEFAULT_GROUP
-      NACOS_USERNAME: nacos
-      NACOS_PASSWORD: nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: campus_item
+      LOGGING_FILE_NAME: /app/logs/campus-item.log
       MYSQL_USER: root
-      MYSQL_PASSWORD: changeme
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
       KAFKA_SERVER: kafka:29092
       CAMPUS_USER_BASE_URL: http://campus-user:8082
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}
+      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-campus-idle}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-your-aliyun-access-key-id}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-your-aliyun-access-key-secret}
     depends_on:
       nacos:
         condition: service_healthy
@@ -295,29 +325,35 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    volumes:
+      - logs-data:/app/logs
     restart: always
 
   campus-order:
-    image: campus-order:latest
+    image: ${IMAGE_PREFIX:-}campus-order:${TAG:-latest}
     container_name: micro-order
     build:
-      context: ./campus-order
+      context: .
       dockerfile: Dockerfile
+      target: campus-order
     environment:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_NAMESPACE: dev
       NACOS_GROUP: DEFAULT_GROUP
-      NACOS_USERNAME: nacos
-      NACOS_PASSWORD: nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: campus_order
+      LOGGING_FILE_NAME: /app/logs/campus-order.log
       MYSQL_USER: root
-      MYSQL_PASSWORD: changeme
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
       KAFKA_SERVER: kafka:29092
+      CAMPUS_ITEM_BASE_URL: http://campus-item:8083
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
     depends_on:
       nacos:
         condition: service_healthy
@@ -335,28 +371,41 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    volumes:
+      - logs-data:/app/logs
     restart: always
 
   campus-admin:
-    image: campus-admin:latest
+    image: ${IMAGE_PREFIX:-}campus-admin:${TAG:-latest}
     container_name: micro-admin
     build:
-      context: ./campus-admin
+      context: .
       dockerfile: Dockerfile
+      target: campus-admin
     environment:
       NACOS_SERVER_ADDR: nacos:8848
       NACOS_NAMESPACE: dev
       NACOS_GROUP: DEFAULT_GROUP
-      NACOS_USERNAME: nacos
-      NACOS_PASSWORD: nacos
+      NACOS_USERNAME: ${NACOS_USERNAME:-nacos}
+      NACOS_PASSWORD: ${NACOS_PASSWORD:-nacos}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: changeme
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: campus_admin
+      LOGGING_FILE_NAME: /app/logs/campus-admin.log
       MYSQL_USER: root
-      MYSQL_PASSWORD: changeme
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      KAFKA_SERVER: kafka:29092
+      CAMPUS_AUTH_URL: http://campus-auth:8081
+      CAMPUS_ITEM_URL: http://campus-item:8083
+      CAMPUS_ORDER_URL: http://campus-order:8084
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-oss-cn-beijing.aliyuncs.com}
+      OSS_BUCKET_NAME: ${OSS_BUCKET_NAME:-campus-idle}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-your-aliyun-access-key-id}
+      OSS_ACCESS_KEY_SECRET: ${OSS_ACCESS_KEY_SECRET:-your-aliyun-access-key-secret}
     depends_on:
       nacos:
         condition: service_healthy
@@ -372,17 +421,20 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    volumes:
+      - logs-data:/app/logs
     restart: always
 
   nginx:
-    image: nginx:alpine
+    image: ${IMAGE_PREFIX:-}campus-nginx:${TAG:-latest}
     container_name: micro-nginx
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
     ports:
       - "8088:80"
       - "8443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./nginx/html:/usr/share/nginx/html
       - ./nginx/logs:/var/log/nginx
     depends_on:
       - campus-gateway
@@ -406,3 +458,4 @@ volumes:
   zookeeper-data:
   zookeeper-logs:
   kafka-data:
+  logs-data:

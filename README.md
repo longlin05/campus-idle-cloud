@@ -93,6 +93,8 @@ campus-idle-cloud/
 
 ## 🚀 快速开始
 
+> 📖 **生产部署请看 [DEPLOYMENT.md](DEPLOYMENT.md)**（服务器准备、环境变量、数据库迁移、备份、CI/CD、验证清单）。
+
 > ⚠️ **重要：安全配置**（详见下方「环境变量」一节）
 > 仓库中的敏感信息已替换为占位符，运行前请先替换为真实值：
 > - 所有数据库 / Redis 密码默认占位 `changeme`
@@ -100,9 +102,12 @@ campus-idle-cloud/
 
 ### 方式一：Docker Compose 一键启动（推荐）
 
-环境要求：Docker、Docker Compose。构建镜像需 JDK 21 + Maven（或用预构建镜像）。
+环境要求：Docker、Docker Compose。镜像采用**多阶段构建**，服务器上无需安装 JDK/Maven/Node —— `docker compose up --build` 会在镜像内完成全部编译与前端打包。
 
 ```bash
+# 0. 配置环境变量（复制模板并填写真实密钥，详见下方「环境变量」一节）
+cp .env.example .env
+
 # 1. 启动全部服务（MySQL、Nacos、Redis、Kafka、Sentinel、各微服务、Nginx）
 docker compose up -d --build
 
@@ -110,8 +115,12 @@ docker compose up -d --build
 docker compose ps
 ```
 
-> Nacos 控制台：http://localhost:8848/nacos（账号密码见 docker-compose.yml）
-> Sentinel 控制台：http://localhost:8858
+> 前端（用户端 + 管理后台）由 Nginx 镜像内构建托管，用户端默认通过 http://localhost:8088 访问（含 `/admin` 管理后台）。
+
+> Nacos 控制台：http://localhost:8848/nacos（默认账号 `nacos`/`nacos`，**已开启认证**，首次登录请修改；服务连接账号与 token 见 `.env`）
+
+> 数据库增量补丁脚本（`sql/` 下，如 `patch_fix_missing_schema.sql`）的执行方式见 [DEPLOYMENT.md](DEPLOYMENT.md#4-数据库初始化与迁移)。
+> Sentinel 控制台：http://localhost:8858（默认账号 `sentinel`/`sentinel`）
 
 ### 方式二：本地手动启动（开发调试）
 
@@ -166,10 +175,15 @@ npm run dev        # 默认 http://localhost:5173（已配置 /api 代理到网�
 | `OSS_ACCESS_KEY_SECRET` | `your-aliyun-access-key-secret` | 阿里云 OSS AccessKey Secret |
 | `OSS_ENDPOINT` | `oss-cn-beijing.aliyuncs.com` | OSS endpoint |
 | `OSS_BUCKET_NAME` | `campus-idle` | OSS Bucket 名称 |
+| `JWT_SECRET` | `your-secret-key-change-in-production` | JWT 签名密钥（所有服务共享，生产必须更换） |
 | `NACOS_SERVER_ADDR` | `localhost:8848` | Nacos 地址 |
+| `NACOS_USERNAME` | `nacos` | 服务连接 Nacos 的账号（与控制台账号一致） |
+| `NACOS_PASSWORD` | `nacos` | 服务连接 Nacos 的密码 |
+| `NACOS_AUTH_TOKEN` | 见 `.env.example` | Nacos 认证 token（base64，>32 字节，生产必须更换） |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:8088,http://localhost:5173` | 网关允许跨域的来源（逗号分隔） |
 | `KAFKA_SERVER` | `localhost:9092` | Kafka 地址 |
 
-> **注意**：生产环境请通过环境变量 / 配置中心注入真实凭据，不要写入配置文件。同时建议修改各服务 `application.yml` 中默认的 JWT secret（`jwt.secret`）。
+> **注意**：以上变量统一从 `.env` 读取（模板见 [.env.example](.env.example)），生产环境请填写真实凭据，不要使用默认值。`.env` 已被 `.gitignore` 忽略，不会上传 git。
 
 ### 默认账号
 

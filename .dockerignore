@@ -1,0 +1,16 @@
+.git
+.gitattributes
+.idea
+.vscode
+.github
+**/target
+**/*.log
+front/node_modules
+front/dist
+nginx/logs
+data
+temp
+*.env
+*.iml
+HELP.md
+LICENSE
