@@ -1,15 +1,221 @@
-# 校园闲置物品二手交易平台
-基于SpringCloud微架构开发的校园闲置流转项目
+# 校园闲置物品二手交易平台（campus-idle-cloud）
 
-## 📌 项目介绍
-面向大学生校园场景的二手闲置物品交易平台，后续持续迭代开发
+基于 **Spring Cloud 微服务架构** 的校园二手闲置物品交易平台，提供商品发布与交易、购物车、订单、私信聊天、关注收藏、消息通知等完整闭环，并配套一套 Vue3 管理后台。
 
-## 🛠 现阶段技术栈
-- SpringBoot3 + SpringCloud + SpringCloud Alibaba
-- Docker镜像Nacos等服务，替换其软件
-- Nacos注册配置中心
-- SpringCloud Gateway网关
-- MySQL、Redis
+## 📌 项目简介
 
-## 📖 后续迭代规划
-持续完善微服务模块、业务功能
+面向大学生校园场景的二手闲置物品交易平台，采用微服务 + 前后端分离架构：
+
+- **后端**：Spring Boot 3 / Spring Cloud Alibaba 微服务集群（网关、认证、用户、商品、订单、管理后台）
+- **前端**：Vue 3 + TypeScript + Pinia + Vite（用户端 + 管理后台）
+- **基础设施**：Nacos 注册配置中心、MySQL、Redis、Kafka、Sentinel、Nginx
+
+## ✨ 功能特性
+
+### 用户端
+- 注册 / 登录（密码登录 + 短信验证码登录）、忘记密码
+- 商品发布 / 编辑 / 上下架，图片上传（本地 + 阿里云 OSS）
+- 商品浏览、关键词搜索、分类筛选、热门商品
+- 购物车、订单（购买 / 出售）、收货地址管理
+- 收藏、关注 / 粉丝、用户主页
+- 站内私信聊天（Kafka 驱动）、消息中心（系统通知）
+- 个人中心、账号设置（头像 / 昵称 / 邮箱）
+
+### 管理后台
+- 数据概览、用户管理、商品管理、订单管理
+- 商品分类管理、轮播图（系统图片）管理
+- 系统消息推送、管理员管理
+
+## 🛠 技术栈
+
+| 分类 | 技术 |
+| --- | --- |
+| 开发语言 | Java 21、TypeScript |
+| 微服务框架 | Spring Boot 3.3.0、Spring Cloud 2023.0.3、Spring Cloud Alibaba 2023.0.1.0 |
+| 网关 | Spring Cloud Gateway |
+| 注册配置中心 | Nacos 2.3.2 |
+| 持久化 | MySQL 8.0 + MyBatis-Plus |
+| 缓存 | Redis 8.0 |
+| 消息队列 | Apache Kafka 7.5.0 + ZooKeeper |
+| 限流熔断 | Sentinel Dashboard 1.8.6 |
+| 文件存储 | 阿里云 OSS |
+| 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios |
+| 部署 | Docker / Docker Compose、Nginx |
+
+## 🏗 项目结构
+
+```
+campus-idle-cloud/
+├── common/          # 公共模块：实体、DTO/VO、JWT、OSS、Kafka、Redis、统一异常与响应
+├── campus-gateway/  # 网关服务 (8080)：路由转发、JWT 鉴权、跨域
+├── campus-auth/     # 认证服务 (8081)：登录/注册/重置密码、默认管理员初始化
+├── campus-user/     # 用户服务 (8082)：个人中心、购物车、收藏、关注、私信、消息、地址
+├── campus-item/     # 商品服务 (8083)：商品 CRUD、分类、搜索、文件上传（OSS）
+├── campus-order/    # 订单服务 (8084)：订单创建/支付流程、订单快照
+├── campus-admin/    # 管理后台服务 (8085)：用户/商品/订单/分类/轮播图/系统消息管理
+├── front/           # 前端工程：Vue3 用户端 + 管理后台
+├── sql/             # SQL 初始化脚本
+├── nginx/           # Nginx 反向代理配置
+└── docker-compose.yml  # 一键编排基础设施 + 全部微服务
+```
+
+### 微服务架构
+
+```
+                        ┌────────────┐
+                        │   Nginx    │  :8088 / :8443
+                        └─────┬──────┘
+                              │
+                        ┌─────▼──────┐        ┌──────────────┐
+  前端(Vue3, :5173) ───►│  Gateway   │────────► Nacos 注册中心│
+                        │   :8080    │        └──────────────┘
+                        └──┬───┬──┬──┘
+           ┌───────────────┘   │  └────────────────┐
+           ▼                   ▼                    ▼
+     ┌──────────┐      ┌──────────┐          ┌──────────┐
+     │campus-auth│      │campus-user│  ...    │campus-admin│
+     │   :8081  │      │   :8082  │          │   :8085  │
+     └──────────┘      └────┬─────┘          └──────────┘
+                            │ Kafka / MySQL / Redis / OSS
+```
+
+### 数据库
+
+每个业务服务使用独立数据库，登录走 `campus_auth` 库：
+
+| 数据库 | 归属服务 |
+| --- | --- |
+| campus_auth | 认证服务（含用户登录信息） |
+| campus_user | 用户服务 |
+| campus_item | 商品服务 |
+| campus_order | 订单服务 |
+| campus_admin | 管理后台服务 |
+
+## 🚀 快速开始
+
+> ⚠️ **重要：安全配置**（详见下方「环境变量」一节）
+> 仓库中的敏感信息已替换为占位符，运行前请先替换为真实值：
+> - 所有数据库 / Redis 密码默认占位 `changeme`
+> - 阿里云 OSS 密钥默认占位 `your-aliyun-access-key-id` / `your-aliyun-access-key-secret`
+
+### 方式一：Docker Compose 一键启动（推荐）
+
+环境要求：Docker、Docker Compose。构建镜像需 JDK 21 + Maven（或用预构建镜像）。
+
+```bash
+# 1. 启动全部服务（MySQL、Nacos、Redis、Kafka、Sentinel、各微服务、Nginx）
+docker compose up -d --build
+
+# 2. 查看状态
+docker compose ps
+```
+
+> Nacos 控制台：http://localhost:8848/nacos（账号密码见 docker-compose.yml）
+> Sentinel 控制台：http://localhost:8858
+
+### 方式二：本地手动启动（开发调试）
+
+**1. 启动基础设施（Docker）**
+
+```bash
+# 只启动基础设施，微服务在 IDE 中分别启动
+docker compose up -d mysql nacos redis zookeeper kafka sentinel
+```
+
+**2. 初始化数据库**
+
+`sql/init.sql` 已挂载为 MySQL 容器初始化脚本，也可手动导入到各 `campus_*` 库。
+
+**3. 启动后端微服务（IDE 或命令行）**
+
+模块依赖顺序：`common` → `campus-gateway` / `campus-auth` / `campus-user` / `campus-item` / `campus-order` / `campus-admin`。
+
+```bash
+mvn clean install -DskipTests          # 根目录先打包 common 等公共依赖
+mvn spring-boot:run -pl campus-gateway
+# 依次启动其余微服务...
+```
+
+**4. 启动前端**
+
+```bash
+cd front
+npm install
+npm run dev        # 默认 http://localhost:5173（已配置 /api 代理到网关 8080）
+```
+
+### 访问地址
+
+| 入口 | 地址 |
+| --- | --- |
+| 用户端（开发） | http://localhost:5173 |
+| 用户端（Nginx） | http://localhost:8088 |
+| 管理后台 | http://localhost:5173/admin 或 http://localhost:8088/admin |
+| 网关 | http://localhost:8080 |
+
+## 🔐 环境变量与安全配置
+
+所有服务均支持通过环境变量覆盖默认配置（`${VAR:default}` 形式）。**推送 / 部署前请务必替换占位符：**
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `MYSQL_ROOT_PASSWORD` | `changeme` | MySQL root 密码（docker-compose） |
+| `MYSQL_PASSWORD` | `changeme` | 各服务 MySQL 连接密码 |
+| `REDIS_PASSWORD` | `changeme` | Redis 密码 |
+| `OSS_ACCESS_KEY_ID` | `your-aliyun-access-key-id` | 阿里云 OSS AccessKey ID |
+| `OSS_ACCESS_KEY_SECRET` | `your-aliyun-access-key-secret` | 阿里云 OSS AccessKey Secret |
+| `OSS_ENDPOINT` | `oss-cn-beijing.aliyuncs.com` | OSS endpoint |
+| `OSS_BUCKET_NAME` | `campus-idle` | OSS Bucket 名称 |
+| `NACOS_SERVER_ADDR` | `localhost:8848` | Nacos 地址 |
+| `KAFKA_SERVER` | `localhost:9092` | Kafka 地址 |
+
+> **注意**：生产环境请通过环境变量 / 配置中心注入真实凭据，不要写入配置文件。同时建议修改各服务 `application.yml` 中默认的 JWT secret（`jwt.secret`）。
+
+### 默认账号
+
+| 角色 | 手机号 | 密码 |
+| --- | --- | --- |
+| 管理员 | 13800138000 | admin123 |
+| 管理员 | 13800000000 | 123456 |
+
+> 默认管理员由认证服务启动时自动初始化（`AdminInitializer`），首次登录后请尽快修改。
+
+## 🌐 网关路由
+
+| 前缀 | 后端服务 | 端口 |
+| --- | --- | --- |
+| `/api/auth/**` → `/auth/**` | campus-auth | 8081 |
+| `/api/user/**` → `/user/**` | campus-user | 8082 |
+| `/api/product/**`、`/api/item/**` → `/item/**` | campus-item | 8083 |
+| `/api/cart/**`、`/api/favorite/**`、`/api/chat/**`、`/api/follow/**`、`/api/notification/**` | campus-user | 8082 |
+| `/api/orders/**`、`/order/**` | campus-order | 8084 |
+| `/api/admin/**` → `/admin/**` | campus-admin | 8085 |
+
+网关通过全局 `AuthFilter` 校验 JWT，将用户身份写入 `X-User-*` 请求头转发给下游，并剥离客户端伪造的同名头。
+
+## 🔌 端口一览
+
+| 端口 | 服务 |
+| --- | --- |
+| 8080 | campus-gateway |
+| 8081 | campus-auth |
+| 8082 | campus-user |
+| 8083 | campus-item |
+| 8084 | campus-order |
+| 8085 | campus-admin |
+| 5173 | Vite 前端开发服务 |
+| 8088 / 8443 | Nginx (HTTP / HTTPS) |
+| 13306 | MySQL（宿主机映射） |
+| 6379 | Redis |
+| 8848 / 9848 / 9849 | Nacos |
+| 2181 | ZooKeeper |
+| 9092 / 29092 | Kafka |
+| 8858 | Sentinel Dashboard |
+
+## 📖 后续规划
+
+持续完善微服务模块与业务功能（评价体系、支付对接、消息推送、数据统计等）。
+
+## 📄 License
+
+本项目基于 [MIT License](LICENSE) 开源。

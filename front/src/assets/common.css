@@ -1,0 +1,43 @@
+/**
+ * @file common.css
+ * @description 全局通用样式文件
+ * @author 林 15079141949
+ * @date 2026-06-05
+ * @sections reset(样式重置)、base(基础样式)、container(容器)、links(链接)、utilities(工具类)
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+.container {
+    width: 1200px;
+    margin: 0 auto;
+}
+
+a {
+    text-decoration: none;
+    color: #333;
+}
+
+ul {
+    list-style: none;
+}
+
+button {
+    cursor: pointer;
+}
+
+.clearfix::after {
+    content: '';
+    display: table;
+    clear: both;
+}

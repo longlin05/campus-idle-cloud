@@ -1,0 +1,106 @@
+server:
+  port: 8082
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
+      force-request: true
+
+jwt:
+  secret: your-secret-key-change-in-production
+  expire-time: 86400000
+  token-prefix: Bearer
+
+spring:
+  application:
+    name: campus-user
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        import-check:
+          enabled: false
+        fail-fast: false
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        fail-fast: false
+        ip: 127.0.0.1
+        port: ${server.port}
+        prefer-ip-address: true
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      max-lifetime: 600000
+      pool-name: campus-user-pool
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:campus_user}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:changeme}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:changeme}
+      database: ${REDIS_DATABASE:1}
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER:localhost:9092}
+    producer:
+      retries: 3
+      acks: all
+      batch-size: 16384
+      buffer-memory: 33554432
+    consumer:
+      group-id: campus-user-group
+      auto-offset-reset: latest
+      max-poll-records: 500
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Kafka 开关：本地无 Kafka 时设为 false 即可正常运行
+lin:
+  kafka:
+    enabled: true
+    consumer:
+      concurrency: 3
+      retry-max-attempts: 3
+      retry-interval: 2000
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+
+# 阿里云 OSS 配置
+aliyun:
+  oss:
+    endpoint: ${OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    bucket-name: ${OSS_BUCKET_NAME:campus-idle}
+    access-key-id: ${OSS_ACCESS_KEY_ID:your-aliyun-access-key-id}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:your-aliyun-access-key-secret}
+
+# campus-auth 地址（用于同步用户资料：头像/昵称/邮箱）
+# 本地开发: http://localhost:8081
+# Docker 环境: http://campus-auth:8081
+campus:
+  auth:
+    base-url: ${CAMPUS_AUTH_BASE_URL:http://localhost:8081}

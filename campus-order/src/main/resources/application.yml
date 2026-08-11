@@ -1,0 +1,101 @@
+server:
+  port: 8084
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
+      force-request: true
+
+jwt:
+  secret: your-secret-key-change-in-production
+  expire-time: 86400000
+  token-prefix: Bearer
+
+spring:
+  application:
+    name: campus-order
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:campus_order}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:changeme}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      max-lifetime: 600000
+      pool-name: campus-order-pool
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:changeme}
+      database: ${REDIS_DATABASE:3}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER:localhost:9092}
+    producer:
+      retries: 3
+      acks: all
+      batch-size: 16384
+      buffer-memory: 33554432
+    consumer:
+      group-id: campus-order-group
+      auto-offset-reset: latest
+      max-poll-records: 500
+
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        import-check:
+          enabled: false
+        fail-fast: false
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        fail-fast: false
+        ip: 127.0.0.1
+        port: ${server.port}
+        prefer-ip-address: true
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# campus-item 服务地址：Nacos服务名（负载均衡）或本地直连
+# 本地开发: http://localhost:8083  （Nacos未就绪时使用直连）
+# Docker环境: http://campus-item
+campus:
+  item:
+    base-url: ${CAMPUS_ITEM_BASE_URL:http://localhost:8083}
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  level:
+    org.lin.campusorder: debug
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
+
+# Kafka 开关：本地无 Kafka 时设为 false 即可正常运行
+lin:
+  kafka:
+    enabled: true
+    consumer:
+      concurrency: 3
+      retry-max-attempts: 3
+      retry-interval: 2000

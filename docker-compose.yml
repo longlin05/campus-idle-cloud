@@ -1,0 +1,408 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: micro-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: changeme
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "13306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: micro-nacos
+    environment:
+      MODE: standalone
+      NACOS_APPLICATION_PORT: 8848
+      NACOS_AUTH_ENABLE: 'false'
+      NACOS_METRICS_PROMETHEUS_ENABLE: 'false'
+      NACOS_METRICS_ENABLE: 'false'
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+      JAVA_OPT: '-Dnacos.standalone=true -Dnacos.core.auth.enabled=false -XX:-UseContainerSupport'
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    volumes:
+      - nacos-logs:/home/nacos/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8848 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: always
+
+  redis:
+    image: redis:8.0-alpine
+    container_name: micro-redis
+    command: redis-server --requirepass changeme --appendonly yes
+    environment:
+      REDIS_PASSWORD: changeme
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "changeme", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: micro-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 2181 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    restart: always
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: micro-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # 必须显式声明 KAFKA_LISTENERS，否则 cp-kafka 会从 ADVERTISED_LISTENERS 反推
+      # 绑定端口，导致两个监听器都用 9092 端口冲突：
+      # "Each listener must have a different port, listeners: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:9092"
+      # 内部监听器绑 29092（容器间通信），外部监听器绑 9092（宿主机访问）
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_MESSAGE_MAX_BYTES: 5242880
+      # 限制堆内存，避免占用过大
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms256M"
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 9092 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+
+  sentinel:
+    image: bladex/sentinel-dashboard:1.8.6
+    container_name: micro-sentinel
+    ports:
+      - "8858:8858"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8858 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  campus-gateway:
+    image: campus-gateway:latest
+    container_name: micro-gateway
+    build:
+      context: ./campus-gateway
+      dockerfile: Dockerfile
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: changeme
+    ports:
+      - "8080:8080"
+    depends_on:
+      nacos:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8080 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    restart: always
+
+  campus-auth:
+    image: campus-auth:latest
+    container_name: micro-auth
+    build:
+      context: ./campus-auth
+      dockerfile: Dockerfile
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: changeme
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: campus_auth
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8081 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  campus-user:
+    image: campus-user:latest
+    container_name: micro-user
+    build:
+      context: ./campus-user
+      dockerfile: Dockerfile
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: changeme
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: campus_user
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+      KAFKA_SERVER: kafka:29092
+      CAMPUS_AUTH_BASE_URL: http://campus-auth:8081
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8082 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  campus-item:
+    image: campus-item:latest
+    container_name: micro-item
+    build:
+      context: ./campus-item
+      dockerfile: Dockerfile
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: changeme
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: campus_item
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+      KAFKA_SERVER: kafka:29092
+      CAMPUS_USER_BASE_URL: http://campus-user:8082
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8083 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  campus-order:
+    image: campus-order:latest
+    container_name: micro-order
+    build:
+      context: ./campus-order
+      dockerfile: Dockerfile
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: changeme
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: campus_order
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+      KAFKA_SERVER: kafka:29092
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8084 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  campus-admin:
+    image: campus-admin:latest
+    container_name: micro-admin
+    build:
+      context: ./campus-admin
+      dockerfile: Dockerfile
+    environment:
+      NACOS_SERVER_ADDR: nacos:8848
+      NACOS_NAMESPACE: dev
+      NACOS_GROUP: DEFAULT_GROUP
+      NACOS_USERNAME: nacos
+      NACOS_PASSWORD: nacos
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: changeme
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: campus_admin
+      MYSQL_USER: root
+      MYSQL_PASSWORD: changeme
+    depends_on:
+      nacos:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z localhost 8085 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: micro-nginx
+    ports:
+      - "8088:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/html:/usr/share/nginx/html
+      - ./nginx/logs:/var/log/nginx
+    depends_on:
+      - campus-gateway
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+networks:
+  microservices-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  nacos-logs:
+  redis-data:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-data:

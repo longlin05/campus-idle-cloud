@@ -1,6 +1,7 @@
 package org.lin.common.util;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 public class CodeUtil {
 
     @Autowired
+    @Qualifier("stringRedisTemplate")
     private RedisTemplate<String, String> redisTemplate;
 
     // 验证码长度

@@ -1,0 +1,14 @@
+[client]
+default-character-set = utf8mb4
+
+[connection]
+collation-server = utf8mb4_unicode_ci
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+init_connect = 'SET NAMES utf8mb4'
+skip-character-set-client-handshake

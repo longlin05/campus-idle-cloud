@@ -1,0 +1,119 @@
+server:
+  port: 8083
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
+      force-request: true
+
+jwt:
+  secret: your-secret-key-change-in-production
+  expire-time: 86400000
+  token-prefix: Bearer
+
+spring:
+  application:
+    name: campus-item
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        import-check:
+          enabled: false
+        fail-fast: false
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        fail-fast: false
+        ip: 127.0.0.1
+        port: ${server.port}
+        prefer-ip-address: true
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      max-lifetime: 600000
+      pool-name: campus-item-pool
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:campus_item}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:changeme}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:changeme}
+      database: ${REDIS_DATABASE:2}
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER:localhost:9092}
+    producer:
+      retries: 3
+      acks: all
+      batch-size: 16384
+      buffer-memory: 33554432
+    consumer:
+      group-id: campus-item-group
+      auto-offset-reset: latest
+      max-poll-records: 500
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+file:
+  upload:
+    base-path: ./uploads/
+    product-path: ${file.upload.base-path}products/
+    avatar-path: ${file.upload.base-path}avatars/
+    system-path: ${file.upload.base-path}system/
+
+# 阿里云 OSS 配置
+aliyun:
+  oss:
+    endpoint: ${OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    bucket-name: ${OSS_BUCKET_NAME:campus-idle}
+    access-key-id: ${OSS_ACCESS_KEY_ID:your-aliyun-access-key-id}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:your-aliyun-access-key-secret}
+    # url-prefix 可以留空，会自动拼接为 https://{bucket-name}.{endpoint}/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Kafka 开关：本地无 Kafka 时设为 false 即可正常运行，不影响主流程
+lin:
+  kafka:
+    enabled: true
+    consumer:
+      concurrency: 3
+      retry-max-attempts: 3
+      retry-interval: 2000
+
+# campus-user 地址（用于查询卖家信息）
+# 本地开发: http://localhost:8082
+# Docker 环境: http://campus-user:8082
+campus:
+  user:
+    base-url: ${CAMPUS_USER_BASE_URL:http://localhost:8082}
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8

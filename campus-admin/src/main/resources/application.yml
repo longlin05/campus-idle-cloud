@@ -1,0 +1,107 @@
+server:
+  port: 8085
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
+      force-request: true
+
+jwt:
+  secret: your-secret-key-change-in-production
+  expire-time: 86400000
+  token-prefix: Bearer
+
+spring:
+  application:
+    name: campus-admin
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:13306}/${MYSQL_DATABASE:campus_admin}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:changeme}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 5000
+      max-lifetime: 600000
+      pool-name: campus-admin-pool
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:changeme}
+      database: ${REDIS_DATABASE:4}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER:localhost:9092}
+    producer:
+      retries: 3
+      acks: all
+      batch-size: 16384
+      buffer-memory: 33554432
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        import-check:
+          enabled: false
+        fail-fast: false
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        fail-fast: false
+        ip: 127.0.0.1
+        port: ${server.port}
+        prefer-ip-address: true
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+aliyun:
+  oss:
+    endpoint: ${OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    bucket-name: ${OSS_BUCKET_NAME:campus-idle}
+    access-key-id: ${OSS_ACCESS_KEY_ID:your-aliyun-access-key-id}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:your-aliyun-access-key-secret}
+
+campus:
+  auth:
+    service-url: ${CAMPUS_AUTH_URL:http://localhost:8081}
+  item:
+    service-url: ${CAMPUS_ITEM_URL:http://localhost:8083}
+  order:
+    service-url: ${CAMPUS_ORDER_URL:http://localhost:8084}
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  level:
+    org.lin.campusadmin: debug
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always
+
+# Kafka 开关：本地无 Kafka 时设为 false 即可正常运行（系统消息发送会降级为直接返回提示）
+lin:
+  kafka:
+    enabled: true

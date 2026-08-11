@@ -1,29 +1,119 @@
 spring:
   application:
     name: campus-gateway
-  config:
-    import: optional:nacos:localhost:8848
+  main:
+    web-application-type: reactive
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration
+      - com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:changeme}
+      database: ${REDIS_DATABASE:5}
   cloud:
+    nacos:
+      config:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        import-check:
+          enabled: false
+        fail-fast: false
+      discovery:
+        server-addr: ${NACOS_SERVER_ADDR:localhost:8848}
+        fail-fast: false
     gateway:
+      httpclient:
+        connect-timeout: 3000
+        response-timeout: 30s
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            exposedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
       routes:
         - id: campus-auth
           uri: lb://campus-auth
           predicates:
-            - Path=/auth/**
+            - Path=/auth/**,/api/auth/**
           filters:
-            - StripPrefix=1
+            - RewritePath=/api/auth/(?<segment>.*), /auth/$\{segment}
         - id: campus-user
           uri: lb://campus-user
           predicates:
-            - Path=/user/**
+            - Path=/user/**,/api/user/**
           filters:
-            - StripPrefix=1
+            - RewritePath=/api/user/(?<segment>.*), /user/$\{segment}
         - id: campus-item
           uri: lb://campus-item
           predicates:
-            - Path=/item/**
+            - Path=/item/**,/api/item/**,/api/product/**
           filters:
-            - StripPrefix=1
+            - RewritePath=/api/(product|item)/(?<segment>.*), /item/$\{segment}
+        - id: campus-user-cart
+          uri: lb://campus-user
+          predicates:
+            - Path=/api/cart/**
+          filters:
+            - RewritePath=/api/cart/(?<segment>.*), /user/cart/$\{segment}
+        - id: campus-user-favorite
+          uri: lb://campus-user
+          predicates:
+            - Path=/api/favorite/**
+          filters:
+            - RewritePath=/api/favorite/(?<segment>.*), /user/favorite/$\{segment}
+        - id: campus-order
+          uri: lb://campus-order
+          predicates:
+            - Path=/order/**,/api/orders/**
+        - id: campus-user-chat
+          uri: lb://campus-user
+          predicates:
+            - Path=/api/chat/**
+          filters:
+            - RewritePath=/api/chat/(?<segment>.*), /user/chat/$\{segment}
+        - id: campus-user-follow
+          uri: lb://campus-user
+          predicates:
+            - Path=/api/follow/**
+          filters:
+            - RewritePath=/api/follow/(?<segment>.*), /user/follow/$\{segment}
+        - id: campus-user-notification
+          uri: lb://campus-user
+          predicates:
+            - Path=/api/notification/**
+          filters:
+            - RewritePath=/api/notification/(?<segment>.*), /user/notification/$\{segment}
+        - id: campus-admin
+          uri: lb://campus-admin
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - RewritePath=/api/admin/(?<segment>.*), /admin/$\{segment}
+      discovery:
+        locator:
+          enabled: true
 
 server:
   port: 8080
+
+jwt:
+  secret: your-secret-key-change-in-production
+  expire-time: 86400000
+  token-prefix: Bearer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

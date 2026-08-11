@@ -1,7 +1,7 @@
 package org.lin.common.exception;
 
 import lombok.Getter;
-import org.lin.campusidle.common.result.ResultCodeEnum;
+import org.lin.common.result.ResultCodeEnum;
 
 @Getter
 public class BusinessException extends RuntimeException {
